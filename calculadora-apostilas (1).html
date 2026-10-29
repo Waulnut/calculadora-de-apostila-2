@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculadora de Pedido de Apostilas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--tx:#1b2433;--mut:#667085;--pri:#1f3a5f;--acc:#e8590c;--ok:#2b8a3e;--bd:#e3e8ef}
+@media(prefers-color-scheme:dark){:root{--bg:#10151d;--card:#1a212c;--tx:#e8ecf2;--mut:#98a2b3;--pri:#7aa7e0;--bd:#2a3342}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:#1f3a5f;color:#fff;padding:18px 24px}header h1{margin:0;font-size:20px}header p{margin:2px 0 0;opacity:.8;font-size:13px}
+main{max-width:1100px;margin:0 auto;padding:18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+h2{font-size:15px;margin:0 0 10px;color:var(--pri)}
+.files{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.drop{border:2px dashed var(--bd);border-radius:10px;padding:12px;text-align:center;font-size:13px}
+.drop.ok{border-color:var(--ok);border-style:solid}.drop b{display:block;margin-bottom:2px}.drop small{color:var(--mut)}
+.drop input{margin-top:6px;max-width:100%}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
+select,input[type=number],input[type=search]{font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx)}
+.seg{display:flex;gap:6px}.seg button{flex:1;padding:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;font:inherit;cursor:pointer}
+.seg button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.chk{font-size:13px;display:flex;gap:6px;align-items:center}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}.kpi span{font-size:12px;color:var(--mut)}.kpi b{display:block;font-size:26px}
+.kpi.hot b{color:var(--acc)}
+.tabs{display:flex;gap:6px;margin-bottom:10px}.tabs button{border:0;background:none;padding:8px 12px;font:inherit;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent}
+.tabs button.on{color:var(--pri);border-color:var(--pri);font-weight:600}
+.wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}
+th{background:#1f3a5f;color:#fff;text-align:left;padding:8px;position:sticky;top:0;white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--bd)}td.n,th.n{text-align:right}
+tr.hl td.p{background:#fff0e6;color:#b34700;font-weight:700}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;background:#fff0e6;color:#b34700}
+.btn{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px 20px;font:600 15px system-ui;cursor:pointer}
+.btn:disabled{opacity:.4;cursor:not-allowed}.muted{color:var(--mut);font-size:13px}
+td input{width:64px;text-align:right}
+</style>
+</head>
+<body>
+<header><h1>📚 Calculadora de Pedido de Apostilas</h1><p>Tudo é processado no seu navegador — nenhum dado é enviado para a internet.</p></header>
+<main>
+<div class="card"><h2>1. Carregue as planilhas (.xls ou .xlsx)</h2>
+<div class="files">
+<div class="drop" id="d-c"><b>Alunos / módulos</b><small>planilha “c” (módulo atual, aulas concluídas, apostila)</small><br><input type="file" accept=".xls,.xlsx" data-k="c"></div>
+<div class="drop" id="d-g"><b>Frequência do mês</b><small>planilha “g” (presenças, reposições)</small><br><input type="file" accept=".xls,.xlsx" data-k="g"></div>
+<div class="drop" id="d-e"><b>Estoque de apostilas</b><small>planilha “Estoque”</small><br><input type="file" accept=".xls,.xlsx" data-k="e"></div>
+</div></div>
+
+<div class="card"><h2>2. Período e regras</h2>
+<div class="seg" id="seg"><button data-m="1" class="on">1 mês</button><button data-m="2">2 meses</button><button data-m="3">3 meses</button></div><br>
+<div class="opts">
+<label class="f">Aulas por mês (padrão)<input type="number" id="base" value="8" min="1" max="40"></label>
+<label class="f">Alunos que fazem mais de 8 aulas
+<select id="agenda"><option value="1">Usar agenda semanal (aulas/semana × 4)</option><option value="0">Todos no padrão (ajuste manual na aba Alunos)</option></select></label>
+<label class="f">Aluno com mais de um módulo ativo
+<select id="pool"><option value="1">Dividir as aulas entre os módulos</option><option value="0">Cada módulo isolado (mais conservador)</option></select></label>
+<label class="f">Nº de aulas do próximo módulo (se desconhecido)<input type="number" id="deflen" value="16" min="1"></label>
+<label class="f">Aulas já feitas no mês<span class="chk"><input type="checkbox" id="rep" checked> contar reposições e aulas extras</span></label>
+<label class="f">Estoque utilizável<span class="chk"><input type="checkbox" id="tat" checked> incluir “Transferido – Ativo”</span></label>
+</div></div>
+
+<div id="res" hidden>
+<div class="kpis" id="kpis"></div>
+<div class="card">
+<div class="tabs"><button class="on" data-t="ped">Pedido por apostila</button><button data-t="alu">Alunos</button><button data-t="att">Atenção</button></div>
+<div id="t-ped" class="wrap"></div>
+<div id="t-alu" class="wrap" hidden></div>
+<div id="t-att" class="wrap" hidden></div>
+</div>
+<button class="btn" id="exp">⬇ Gerar planilha do pedido (.xlsx)</button>
+</div>
+
+<div class="card muted"><b>Como o cálculo funciona:</b> até a aula 5 o aluno não precisa de apostila. Para cada aluno projeta-se quantas aulas ele fará no período
+(ritmo × meses − aulas já feitas no mês); se a projeção chegar à aula 6 ou além de um módulo sem apostila, conta 1 código. Se ele terminar o módulo atual,
+a projeção segue para a “Próxima Matéria”. O tamanho de cada módulo (16, 24, 8…) vem da coluna “Aulas” da planilha c. A pedir = necessárias − estoque utilizável.</div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const st={c:null,g:null,e:null,M:1,ov:{},R:null};
+const esc=s=>String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+const key=s=>{s=String(s).trim();const m=s.match(/^(\d+)_/);return m?m[1]:s.toLowerCase()};
+const nm=s=>String(s).trim().replace(/^\d+_/,'');
+const num=v=>+v||0;
+
+/* ---------- leitura ---------- */
+async function load(k,f){
+  const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+  if(k==='e'){const a=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});const m={};let lab='';
+    for(const r of a.slice(1)){if(r[0])lab=String(r[0]).trim();const bk=String(r[1]).trim();if(!bk)continue;
+      const kk=key(lab);const e=m[kk]||(m[kk]={label:lab,books:[],ativo:0,tAtivo:0});
+      e.books.push(bk);e.ativo+=num(r[2]);e.tAtivo+=num(r[3]);}
+    st.e=m;}
+  else st[k]=XLSX.utils.sheet_to_json(ws,{defval:''}).map(o=>Object.fromEntries(Object.entries(o).map(([a,b])=>[a.trim(),b])));
+  $('#d-'+k).classList.add('ok');recalc();
+}
+$$('input[type=file]').forEach(i=>i.onchange=()=>i.files[0]&&load(i.dataset.k,i.files[0]).catch(e=>alert('Erro ao ler arquivo: '+e.message)));
+$$('#seg button').forEach(b=>b.onclick=()=>{$$('#seg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');st.M=+b.dataset.m;recalc()});
+['base','agenda','pool','deflen','rep','tat'].forEach(i=>$('#'+i).onchange=recalc);
+
+/* ---------- cálculo (CORE) ---------- */
+function calcCore(c,g,e,o){
+  const len={},cnt={};
+  c.forEach(r=>{const k=key(r['Matéria']);(cnt[k]=cnt[k]||{})[r['Aulas']]=(cnt[k][r['Aulas']]||0)+1});
+  for(const k in cnt)len[k]=+Object.entries(cnt[k]).sort((a,b)=>b[1]-a[1])[0][0];
+  const byCt={};c.forEach(r=>(byCt[r['Contrato']]=byCt[r['Contrato']]||[]).push(r));
+  const gBy={};(g||[]).forEach(r=>(gBy[r['Contrato']]=gBy[r['Contrato']]||[]).push(r));
+  const rows=[],alunos=[],alerts=[];
+  for(const ct in byCt){
+    const rs=byCt[ct].slice().sort((a,b)=>num(b['Aulas Concluídas'])-num(a['Aulas Concluídas']));
+    const aluno=String(rs[0]['Aluno']).replace(/\s+/g,' ').trim();
+    const qa=Math.max(...rs.map(r=>num(r['Quantidade Agendamentos'])));
+    const auto=o.agenda?Math.max(o.base,qa*4):o.base;
+    const rate=o.ov[ct]!=null?o.ov[ct]:auto;
+    const gs=gBy[ct]||[];
+    const done=r=>gs.filter(x=>String(x['Cursos']).includes(String(r['Matéria']))).reduce((s,x)=>s+num(x['Presenças'])+num(x['Qtd Aula Realizada'])+(o.rep?num(x['Reposições'])+num(x['Qtd Aula Extra']):0),0);
+    const est=gs.map(x=>x['Estimativa Conclusão Aulas']).find(x=>/Acima/.test(x)&&!/Muito|Abaixo/.test(x));
+    const stagesOf=(r,skip)=>{const s=[{key:key(r['Matéria']),mod:nm(r['Matéria']),tipo:'Atual',C:num(r['Aulas Concluídas']),L:num(r['Aulas']),has:r['Apostila']==='S'}];
+      const p=String(r['Próxima Matéria']||'').trim();
+      if(p&&!skip.has(key(p)))s.push({key:key(p),mod:nm(p),tipo:'Próximo',C:0,L:len[key(p)]||o.deflen,has:false});return s};
+    const run=(stages,pool)=>{for(const s of stages){const k=Math.max(0,Math.min(pool,s.L-s.C));s.end=s.C+k;pool-=k;
+        s.need=!s.has&&s.end>=6;
+        if(s.tipo==='Próximo'&&pool>0&&s.end===s.L)alerts.push({aluno,ct,msg:`Pode concluir também “${s.mod}” e avançar para um módulo seguinte não informado (${pool} aula(s) sobrando).`});
+        rows.push({ct,aluno,key:s.key,mod:s.mod,tipo:s.tipo,C:s.C,L:s.L,end:s.end,rate,need:s.need,has:s.has})}};
+    const act=new Set(rs.map(r=>key(r['Matéria'])));
+    if(o.pool)run(rs.flatMap(r=>stagesOf(r,act)),Math.max(0,o.M*rate-rs.reduce((s,r)=>s+done(r),0)));
+    else rs.forEach(r=>run(stagesOf(r,act),Math.max(0,o.M*rate-done(r))));
+    const mine=rows.filter(x=>x.ct===ct);
+    alunos.push({ct,aluno,mods:rs.map(r=>nm(r['Matéria'])),qa,rate,auto,est:!!est,needs:mine.filter(x=>x.need).map(x=>x.mod),proj:mine.filter(x=>x.end>x.C).map(x=>`${x.mod}: aula ${x.C}→${x.end}/${x.L}`),over:alerts.some(a=>a.ct===ct)});
+  }
+  const agg={};rows.filter(r=>r.need).forEach(r=>{(agg[r.key]=agg[r.key]||{key:r.key,mod:r.mod,need:0}).need++});
+  const nostock=[];
+  const ped=Object.values(agg).map(a=>{const s=e&&e[a.key];if(!s)nostock.push(a.mod);
+    const avail=s?s.ativo+(o.tat?s.tAtivo:0):0;
+    const code=/^\d+$/.test(a.key)?a.key:'—';
+    return{...a,code,book:s?s.books.join(' / '):'(não encontrado no estoque)',avail,order:Math.max(0,a.need-avail),known:!!s}})
+    .sort((a,b)=>b.order-a.order||a.mod.localeCompare(b.mod));
+  return{rows,alunos,alerts,ped,nostock};
+}
+/* ---------- fim CORE ---------- */
+
+const opts=()=>({M:st.M,base:num($('#base').value)||8,agenda:$('#agenda').value==='1',pool:$('#pool').value==='1',deflen:num($('#deflen').value)||16,rep:$('#rep').checked,tat:$('#tat').checked,ov:st.ov});
+function recalc(){
+  if(!st.c||!st.e){$('#res').hidden=true;return}
+  const R=st.R=calcCore(st.c,st.g,st.e,opts());$('#res').hidden=false;
+  const tot=k=>R.ped.reduce((s,p)=>s+p[k],0);
+  $('#kpis').innerHTML=[['Alunos analisados',R.alunos.length,''],['Apostilas necessárias',tot('need'),''],['Utilizáveis em estoque',R.ped.reduce((s,p)=>s+Math.min(p.need,p.avail),0),''],['Total a pedir',tot('order'),'hot']]
+    .map(k=>`<div class="kpi ${k[2]}"><span>${k[0]}</span><b>${k[1]}</b></div>`).join('');
+  $('#t-ped').innerHTML=`<table><tr><th>Código</th><th>Módulo</th><th>Apostila</th><th class=n>Necessárias</th><th class=n>Em estoque</th><th class=n>A pedir</th></tr>`+
+    R.ped.map(p=>`<tr class="${p.order?'hl':''}"><td>${esc(p.code)}</td><td>${esc(p.mod)}</td><td>${esc(p.book)}</td><td class=n>${p.need}</td><td class=n>${p.avail}</td><td class="n p">${p.order}</td></tr>`).join('')+
+    `<tr><td colspan=3><b>Total</b></td><td class=n><b>${tot('need')}</b></td><td class=n><b>${tot('avail')}</b></td><td class=n><b>${tot('order')}</b></td></tr></table>`;
+  drawAlu();
+  $('#t-att').innerHTML=(R.alerts.length||R.nostock.length)?
+    (R.nostock.length?`<p><b>Módulos sem registro no estoque</b> (conferir se têm apostila): ${[...new Set(R.nostock)].map(esc).join('; ')}</p>`:'')+
+    (R.alerts.length?`<p><b>Alunos que podem passar do próximo módulo</b> (a lista de módulos seguintes não está nas planilhas):</p><ul>${R.alerts.map(a=>`<li>${esc(a.aluno)} — ${esc(a.msg)}</li>`).join('')}</ul>`:''):'<p class=muted>Nenhum alerta.</p>';
+}
+function drawAlu(){
+  const q=($('#q')?.value||'').toLowerCase();
+  const list=st.R.alunos.filter(a=>!q||a.aluno.toLowerCase().includes(q)||a.mods.join(' ').toLowerCase().includes(q));
+  $('#t-alu').innerHTML=`<p><input type=search id=q placeholder="Buscar aluno ou módulo…" value="${esc(q)}" style="width:280px"> <span class=muted>Ajuste “Aulas/mês” de quem faz mais (ou menos) de 8 aulas.</span></p>
+  <table><tr><th>Aluno</th><th>Módulos ativos</th><th class=n>Agenda/sem.</th><th class=n>Aulas/mês</th><th>Projeção no período</th><th>Apostilas necessárias</th></tr>`+
+  list.map(a=>`<tr><td>${esc(a.aluno)} ${a.est?'<span class=badge title="Estimativa de conclusão: acima do estimado">acima do estimado</span>':''}</td><td>${a.mods.map(esc).join('<br>')}</td><td class=n>${a.qa||'—'}</td>
+  <td class=n><input type=number min=0 max=40 value="${a.rate}" data-ct="${a.ct}"></td><td style="font-size:12px">${a.proj.map(esc).join('<br>')||'—'}${a.over?'<br><b style="color:#b34700">⚠ passa do próximo módulo: apostilas seguintes não calculáveis</b>':''}</td><td>${a.needs.length?a.needs.map(esc).join('<br>'):'<span class=muted>—</span>'}</td></tr>`).join('')+'</table>';
+  $$('#t-alu input[type=number]').forEach(i=>i.onchange=()=>{const a=st.R.alunos.find(x=>x.ct===i.dataset.ct);st.ov[i.dataset.ct]=+i.value;if(+i.value===a.auto)delete st.ov[i.dataset.ct];recalc()});
+  $('#q').oninput=()=>{const p=$('#q').selectionStart;drawAlu();$('#q').focus();$('#q').setSelectionRange(p,p)};
+}
+$$('.tabs button').forEach(b=>b.onclick=()=>{$$('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');['ped','alu','att'].forEach(t=>$('#t-'+t).hidden=t!==b.dataset.t)});
+
+/* ---------- exportação Excel ---------- */
+const NAVY='FF1F3A5F',LIGHT='FFEEF2F8',ORANGE='FFE8590C';
+const thin={style:'thin',color:{argb:'FFD0D7E2'}},BORD={top:thin,bottom:thin,left:thin,right:thin};
+function head(ws,row,n){const r=ws.getRow(row);r.height=24;for(let i=1;i<=n;i++){const c=r.getCell(i);c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}};c.alignment={vertical:'middle',horizontal:'center',wrapText:true};c.border=BORD}}
+function banner(ws,t,sub,cols){ws.mergeCells(1,1,1,cols);const a=ws.getCell(1,1);a.value=t;a.font={size:18,bold:true,color:{argb:'FFFFFFFF'}};a.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}};a.alignment={vertical:'middle',indent:1};ws.getRow(1).height=36;
+  ws.mergeCells(2,1,2,cols);const b=ws.getCell(2,1);b.value=sub;b.font={italic:true,color:{argb:'FF667085'}};b.alignment={indent:1}}
+function body(ws,r0,r1,n,center=[]){for(let r=r0;r<=r1;r++){const row=ws.getRow(r);for(let i=1;i<=n;i++){const c=row.getCell(i);c.border=BORD;c.alignment={vertical:'middle',wrapText:true,horizontal:center.includes(i)?'center':'left'};if((r-r0)%2)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:LIGHT}}}}}
+async function exportXlsx(){
+  const R=st.R,o=opts(),wb=new ExcelJS.Workbook();wb.creator='Calculadora de Apostilas';
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const sub=`Período: ${o.M} mês(es)  •  Gerado em ${hoje}  •  Ritmo padrão: ${o.base} aulas/mês`;
+  // --- Pedido
+  const ws=wb.addWorksheet('Pedido',{views:[{showGridLines:false,state:'frozen',ySplit:7}],pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+  ws.columns=[{width:10},{width:44},{width:48},{width:16},{width:16},{width:16}];
+  banner(ws,'PEDIDO DE APOSTILAS',sub,6);
+  const k=[['Alunos analisados',R.alunos.length],['Apostilas necessárias',null],['Em estoque (utilizável)',null],['TOTAL A PEDIR',null]];
+  const n=R.ped.length,f=8,l=7+n,t=l+1;
+  ws.getRow(4).height=20;ws.getRow(5).height=34;
+  const kc=[[1,2],[3,3],[4,4],[5,6]];
+  k.forEach((x,i)=>{const [a,b]=kc[i];if(b>a){ws.mergeCells(4,a,4,b);ws.mergeCells(5,a,5,b)}
+    const lc=ws.getCell(4,a),vc=ws.getCell(5,a);lc.value=x[0];lc.font={size:10,color:{argb:'FF667085'},bold:true};lc.alignment={horizontal:'center'};
+    vc.value=i===0?x[1]:{formula:['','SUM(D'+f+':D'+l+')','SUMPRODUCT((D'+f+':D'+l+'<E'+f+':E'+l+')*D'+f+':D'+l+'+(D'+f+':D'+l+'>=E'+f+':E'+l+')*E'+f+':E'+l+')','F'+t][i]};
+    vc.font={size:22,bold:true,color:{argb:i===3?ORANGE:NAVY}};vc.alignment={horizontal:'center',vertical:'middle'};
+    for(let c=a;c<=b;c++){for(const r of[4,5])ws.getCell(r,c).fill={type:'pattern',pattern:'solid',fgColor:{argb:LIGHT}}}});
+  ws.getRow(7).values=['Código','Módulo','Apostila (estoque)','Necessárias','Em estoque','A pedir'];head(ws,7,6);
+  R.ped.forEach((p,i)=>{const r=f+i;ws.getRow(r).values=[p.code,p.mod,p.book,p.need,p.avail,{formula:`MAX(0,D${r}-E${r})`,result:p.order}]});
+  body(ws,f,l,6,[1,4,5,6]);
+  const tr=ws.getRow(t);tr.values=['','TOTAL','',{formula:`SUM(D${f}:D${l})`},{formula:`SUM(E${f}:E${l})`},{formula:`SUM(F${f}:F${l})`}];
+  for(let i=1;i<=6;i++){const c=tr.getCell(i);c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}};c.border=BORD;c.alignment={horizontal:i>3?'center':'left'}}
+  ws.addConditionalFormatting({ref:`F${f}:F${l}`,rules:[{type:'cellIs',operator:'greaterThan',formulae:[0],style:{font:{bold:true,color:{argb:'FFB34700'}},fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFD8BF'}}}}]});
+  ws.getCell(t+2,2).value='A coluna “A pedir” é calculada por fórmula: edite “Em estoque” ou “Necessárias” e ela se atualiza.';ws.getCell(t+2,2).font={italic:true,size:9,color:{argb:'FF667085'}};
+  ws.autoFilter={from:{row:7,column:1},to:{row:l,column:6}};
+  // --- Detalhe
+  const need=R.rows.filter(r=>r.need);
+  const wd=wb.addWorksheet('Detalhe por aluno',{views:[{showGridLines:false,state:'frozen',ySplit:4}]});
+  wd.columns=[{width:11},{width:36},{width:42},{width:12},{width:12},{width:12},{width:12},{width:16}];
+  banner(wd,'ALUNOS QUE PRECISAM DE APOSTILA',sub,8);
+  wd.getRow(4).values=['Contrato','Aluno','Módulo','Momento','Aulas feitas','Total de aulas','Aulas/mês','Aula projetada'];head(wd,4,8);
+  need.sort((a,b)=>a.mod.localeCompare(b.mod)||a.aluno.localeCompare(b.aluno)).forEach((r,i)=>wd.getRow(5+i).values=[+r.ct||r.ct,r.aluno,r.mod,r.tipo==='Atual'?'Módulo atual':'Próximo módulo',r.C,r.L,r.rate,r.end]);
+  body(wd,5,4+need.length,8,[1,4,5,6,7,8]);if(need.length)wd.autoFilter={from:{row:4,column:1},to:{row:4+need.length,column:8}};
+  // --- Atenção
+  const wa=wb.addWorksheet('Atenção',{views:[{showGridLines:false}]});wa.columns=[{width:38},{width:100}];
+  banner(wa,'PONTOS DE ATENÇÃO',sub,2);let r=4;
+  wa.getRow(r).values=['Tipo','Detalhe'];head(wa,r,2);const a0=r+1;
+  [...new Set(R.nostock)].forEach(m=>wa.getRow(++r).values=['Módulo sem registro no estoque',m]);
+  R.alerts.forEach(a=>wa.getRow(++r).values=[a.aluno,a.msg]);
+  if(r===4)wa.getRow(5).values=['—','Nenhum alerta'],r=5;body(wa,a0,r,2);
+  // --- Premissas
+  const wp=wb.addWorksheet('Premissas',{views:[{showGridLines:false}]});wp.columns=[{width:46},{width:70}];
+  banner(wp,'PREMISSAS DO CÁLCULO',sub,2);wp.getRow(4).values=['Parâmetro','Valor'];head(wp,4,2);
+  [['Meses cobertos',o.M],['Aulas por mês (padrão)',o.base],['Alunos acima do padrão',o.agenda?'Agenda semanal × 4 (quando maior que o padrão)':'Todos no padrão'],['Ajustes manuais de ritmo',Object.keys(st.ov).length+' aluno(s)'],
+   ['Módulos simultâneos',o.pool?'Aulas divididas entre os módulos':'Cada módulo isolado'],['Aulas do próximo módulo (se desconhecido)',o.deflen],['Reposições/aulas extras do mês contadas',o.rep?'Sim':'Não'],
+   ['Estoque utilizável','Ativo'+(o.tat?' + Transferido – Ativo':'')],['Regra da apostila','Aulas 1–5 sem apostila; a partir da aula 6 é necessário o código (1 por aluno/módulo)'],['Apostila já possuída','Coluna “Apostila = S” da planilha de alunos']].forEach((x,i)=>wp.getRow(5+i).values=x);
+  body(wp,5,14,2);
+  const buf=await wb.xlsx.writeBuffer(),a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  a.download=`Pedido_Apostilas_${o.M}m_${new Date().toISOString().slice(0,10)}.xlsx`;document.body.appendChild(a);a.click();a.remove();
+}
+$('#exp').onclick=()=>exportXlsx().catch(e=>alert('Erro ao gerar planilha: '+e.message));
+</script>
+</body>
+</html>
